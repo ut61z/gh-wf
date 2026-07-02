@@ -41,3 +41,15 @@ gh wf --web    # Enter = ブラウザでそのワークフローを開く
 | `Ctrl-R` | run 一覧から run を選んでブラウザで開く |
 | `Ctrl-E` | `$EDITOR` で yaml を開く |
 | `Ctrl-Y` | ファイル名をクリップボードにコピー |
+
+### run 一覧のキーバインド
+
+| キー | 動作 |
+|------|------|
+| `Enter` | 選択した run をブラウザで開く |
+| `Ctrl-A` | 全件を表示 |
+| `Ctrl-X` | `skipped` の run だけ除外して表示 |
+| `Ctrl-P` | `success` の run だけ表示 |
+| `Ctrl-F` | `failure` の run だけ表示 |
+| `Ctrl-L` | `cancelled` の run だけ表示 |
+| `Ctrl-G` | `in_progress` の run だけ表示 |

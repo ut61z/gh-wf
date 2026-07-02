@@ -27,17 +27,33 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) \
 dir="$root/.github/workflows"
 [ -d "$dir" ] || { echo "gh-wf: $dir がありません" >&2; exit 1; }
 
-show_runs() {
-  local workflow=$1
-  local selected
+script_path=$(realpath "$0" 2>/dev/null || printf '%s' "$0")
+script_path_q=$(printf '%q' "$script_path")
 
-  selected=$(
+list_runs() {
+  local workflow=$1
+  local status=${2:-}
+  local result_filter=
+
+  if [ "$status" = "without_skipped" ]; then
+    result_filter=$status
+  fi
+
+  if [ -n "$status" ] && [ "$status" != "without_skipped" ]; then
+    gh run list \
+      --workflow="$workflow" \
+      --status "$status" \
+      --limit 50 \
+      --json databaseId,status,conclusion,event,headBranch,createdAt,displayTitle \
+      --jq '.[] | [.databaseId, .status, (.conclusion // "-"), .event, (.headBranch // "-"), .createdAt, (.displayTitle // "-")] | @tsv'
+  else
     gh run list \
       --workflow="$workflow" \
       --limit 50 \
       --json databaseId,status,conclusion,event,headBranch,createdAt,displayTitle \
-      --jq '.[] | [.databaseId, .status, (.conclusion // "-"), .event, (.headBranch // "-"), .createdAt, (.displayTitle // "-")] | @tsv' \
-      | awk -F '\t' '
+      --jq '.[] | [.databaseId, .status, (.conclusion // "-"), .event, (.headBranch // "-"), .createdAt, (.displayTitle // "-")] | @tsv'
+  fi \
+    | awk -v result_filter="$result_filter" -F '\t' '
           BEGIN {
             fmt = "%-11s  %-12s  %-14s  %-30s  %-16s  %s"
           }
@@ -45,6 +61,9 @@ show_runs() {
             return length(value) > width ? substr(value, 1, width - 1) "~" : value
           }
           {
+            if (result_filter == "without_skipped" && $3 == "skipped") {
+              next
+            }
             result = shorten(($2 == "completed" ? $3 : $2), 12)
             event = shorten($4, 14)
             branch = shorten($5, 30)
@@ -53,27 +72,48 @@ show_runs() {
             line = sprintf(fmt, $1, result, event, branch, created, $7)
             print $1 "\t" line
           }
-        ' \
+        '
+}
+
+show_runs() {
+  local workflow=$1
+  local selected
+  local workflow_q
+
+  workflow_q=$(printf '%q' "$workflow")
+
+  selected=$(
+    list_runs "$workflow" \
       | fzf \
-          --prompt 'run> ' \
+          --prompt 'run all> ' \
           --delimiter '\t' \
           --with-nth 2.. \
-          --header 'ID           RESULT        EVENT          BRANCH                          CREATED           TITLE' \
-          --bind 'enter:accept'
+          --header 'ID           RESULT        EVENT          BRANCH                          CREATED           TITLE
+Ctrl-A: 全件 / Ctrl-X: skipped除外 / Ctrl-P: success / Ctrl-F: failure / Ctrl-L: cancelled / Ctrl-G: in_progress' \
+          --bind 'enter:accept' \
+          --bind "ctrl-a:reload($script_path_q --list-runs $workflow_q)+change-prompt(run all> )" \
+          --bind "ctrl-x:reload($script_path_q --list-runs $workflow_q without_skipped)+change-prompt(run without skipped> )" \
+          --bind "ctrl-p:reload($script_path_q --list-runs $workflow_q success)+change-prompt(run success> )" \
+          --bind "ctrl-f:reload($script_path_q --list-runs $workflow_q failure)+change-prompt(run failure> )" \
+          --bind "ctrl-l:reload($script_path_q --list-runs $workflow_q cancelled)+change-prompt(run cancelled> )" \
+          --bind "ctrl-g:reload($script_path_q --list-runs $workflow_q in_progress)+change-prompt(run in_progress> )"
   ) || true
 
   [ -n "$selected" ] || return 0
   gh run view "${selected%%$'\t'*}" --web
 }
 
+if [ "${1:-}" = "--list-runs" ]; then
+  [ -n "${2:-}" ] || { echo "gh-wf: workflow file が必要です" >&2; exit 1; }
+  list_runs "$2" "${3:-}"
+  exit 0
+fi
+
 if [ "${1:-}" = "--runs" ]; then
   [ -n "${2:-}" ] || { echo "gh-wf: workflow file が必要です" >&2; exit 1; }
   show_runs "$2"
   exit 0
 fi
-
-script_path=$(realpath "$0" 2>/dev/null || printf '%s' "$0")
-script_path_q=$(printf '%q' "$script_path")
 
 # Enter のデフォルトは run 選択。--web / -w でブラウザに切り替える。
 enter_action="$script_path_q --runs {}"
