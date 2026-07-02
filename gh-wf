@@ -29,9 +29,11 @@ dir="$root/.github/workflows"
 
 # Enter のデフォルトは run 一覧。--web / -w でブラウザに切り替える。
 enter_action='gh run list --workflow={} --limit 20 | less -R'
+enter_bind="enter:execute($enter_action)"
 header='Enter: run一覧 / Ctrl-O: ブラウザ / Ctrl-E: エディタ / Ctrl-Y: コピー'
 if [ "${1:-}" = "--web" ] || [ "${1:-}" = "-w" ]; then
   enter_action='gh workflow view {} --web'
+  enter_bind="enter:execute-silent($enter_action)+abort"
   header='Enter: ブラウザ / Ctrl-R: run一覧 / Ctrl-E: エディタ / Ctrl-Y: コピー'
 fi
 
@@ -40,8 +42,10 @@ shopt -s nullglob
 files=("$dir"/*.yml "$dir"/*.yaml)
 (( ${#files[@]} )) || { echo "gh-wf: ワークフローファイルがありません ($dir)" >&2; exit 0; }
 
-# bat があればシンタックスハイライト、無ければ cat にフォールバック。
-preview='bat --color=always --style=numbers,header "'"$dir"'/{}" 2>/dev/null || cat "'"$dir"'/{}"'
+# fzf の {} は shell 用に自動でクォートされる。
+# "$dir/{}" のように追加で囲むと、クォート文字がファイル名に混ざる。
+export GH_WF_WORKFLOW_DIR="$dir"
+preview='file=$GH_WF_WORKFLOW_DIR/{}; bat --color=always --style=numbers,header "$file" 2>/dev/null || cat "$file"'
 
 printf '%s\n' "${files[@]##*/}" \
   | fzf \
@@ -49,8 +53,8 @@ printf '%s\n' "${files[@]##*/}" \
       --preview "$preview" \
       --preview-window=right:65%:wrap \
       --header "$header" \
-      --bind "enter:execute($enter_action)" \
-      --bind "ctrl-o:execute-silent(gh workflow view {} --web)" \
+      --bind "$enter_bind" \
+      --bind "ctrl-o:execute-silent(gh workflow view {} --web)+abort" \
       --bind "ctrl-r:execute(gh run list --workflow={} --limit 20 | less -R)" \
-      --bind "ctrl-e:execute(\${EDITOR:-vi} \"$dir/{}\")" \
+      --bind "ctrl-e:execute(file=\$GH_WF_WORKFLOW_DIR/{}; \${EDITOR:-vi} \"\$file\")" \
       --bind "ctrl-y:execute-silent(printf %s {} | pbcopy)"
