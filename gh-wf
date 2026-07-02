@@ -6,13 +6,13 @@
 # 「削除済みだが run 履歴が残っているワークフロー」は自動的に除外される。
 #
 # Usage:
-#   gh wf            # Enter = そのワークフローの run 一覧
+#   gh wf            # Enter = そのワークフローの run 一覧から run を選んでブラウザで開く
 #   gh wf --web      # Enter = ブラウザでそのワークフローを開く
 #
 # Keybinds (fzf 内):
-#   Enter   起動オプションに応じて run 一覧 or ブラウザ
+#   Enter   起動オプションに応じて run 選択 or ブラウザ
 #   Ctrl-O  ブラウザでワークフローを開く
-#   Ctrl-R  run 一覧を表示
+#   Ctrl-R  run 一覧から run を選んでブラウザで開く
 #   Ctrl-E  $EDITOR で yaml を開く
 #   Ctrl-Y  ファイル名をクリップボードにコピー
 #
@@ -27,8 +27,56 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) \
 dir="$root/.github/workflows"
 [ -d "$dir" ] || { echo "gh-wf: $dir がありません" >&2; exit 1; }
 
-# Enter のデフォルトは run 一覧。--web / -w でブラウザに切り替える。
-enter_action='gh run list --workflow={} --limit 20 | less -R'
+show_runs() {
+  local workflow=$1
+  local selected
+
+  selected=$(
+    gh run list \
+      --workflow="$workflow" \
+      --limit 50 \
+      --json databaseId,status,conclusion,event,headBranch,createdAt,displayTitle \
+      --jq '.[] | [.databaseId, .status, (.conclusion // "-"), .event, (.headBranch // "-"), .createdAt, (.displayTitle // "-")] | @tsv' \
+      | awk -F '\t' '
+          BEGIN {
+            fmt = "%-11s  %-12s  %-14s  %-30s  %-16s  %s"
+          }
+          function shorten(value, width) {
+            return length(value) > width ? substr(value, 1, width - 1) "~" : value
+          }
+          {
+            result = shorten(($2 == "completed" ? $3 : $2), 12)
+            event = shorten($4, 14)
+            branch = shorten($5, 30)
+            created = substr($6, 1, 16)
+            gsub("T", " ", created)
+            line = sprintf(fmt, $1, result, event, branch, created, $7)
+            print $1 "\t" line
+          }
+        ' \
+      | fzf \
+          --prompt 'run> ' \
+          --delimiter '\t' \
+          --with-nth 2.. \
+          --header 'ID           RESULT        EVENT          BRANCH                          CREATED           TITLE' \
+          --bind 'enter:accept'
+  ) || true
+
+  [ -n "$selected" ] || return 0
+  gh run view "${selected%%$'\t'*}" --web
+}
+
+if [ "${1:-}" = "--runs" ]; then
+  [ -n "${2:-}" ] || { echo "gh-wf: workflow file が必要です" >&2; exit 1; }
+  show_runs "$2"
+  exit 0
+fi
+
+script_path=$(realpath "$0" 2>/dev/null || printf '%s' "$0")
+script_path_q=$(printf '%q' "$script_path")
+
+# Enter のデフォルトは run 選択。--web / -w でブラウザに切り替える。
+enter_action="$script_path_q --runs {}"
 enter_bind="enter:execute($enter_action)"
 header='Enter: run一覧 / Ctrl-O: ブラウザ / Ctrl-E: エディタ / Ctrl-Y: コピー'
 if [ "${1:-}" = "--web" ] || [ "${1:-}" = "-w" ]; then
@@ -55,6 +103,6 @@ printf '%s\n' "${files[@]##*/}" \
       --header "$header" \
       --bind "$enter_bind" \
       --bind "ctrl-o:execute-silent(gh workflow view {} --web)+abort" \
-      --bind "ctrl-r:execute(gh run list --workflow={} --limit 20 | less -R)" \
+      --bind "ctrl-r:execute($script_path_q --runs {})" \
       --bind "ctrl-e:execute(file=\$GH_WF_WORKFLOW_DIR/{}; \${EDITOR:-vi} \"\$file\")" \
       --bind "ctrl-y:execute-silent(printf %s {} | pbcopy)"

@@ -22,7 +22,7 @@ gh extension install /Users/ut61z/src/github.com/ut61z/gh-wf
 ## 使い方
 
 ```bash
-gh wf          # Enter = そのワークフローの run 一覧
+gh wf          # Enter = そのワークフローの run 一覧から run を選んでブラウザで開く
 gh wf --web    # Enter = ブラウザでそのワークフローを開く
 ```
 
@@ -30,8 +30,8 @@ gh wf --web    # Enter = ブラウザでそのワークフローを開く
 
 | キー | 動作 |
 |------|------|
-| `Enter` | 起動オプションに応じて run 一覧 or ブラウザ |
+| `Enter` | 起動オプションに応じて run 選択 or ブラウザ |
 | `Ctrl-O` | ブラウザでワークフローを開く |
-| `Ctrl-R` | run 一覧を表示 |
+| `Ctrl-R` | run 一覧から run を選んでブラウザで開く |
 | `Ctrl-E` | `$EDITOR` で yaml を開く |
 | `Ctrl-Y` | ファイル名をクリップボードにコピー |
