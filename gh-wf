@@ -89,7 +89,7 @@ show_runs() {
           --delimiter '\t' \
           --with-nth 2.. \
           --header 'ID           RESULT        EVENT          BRANCH                          CREATED           TITLE
-Ctrl-A: 全件 / Ctrl-X: skipped除外 / Ctrl-P: success / Ctrl-F: failure / Ctrl-L: cancelled / Ctrl-G: in_progress' \
+Ctrl-A all / Ctrl-X no-skip / Ctrl-P ok / Ctrl-F fail / Ctrl-L cancel / Ctrl-G running' \
           --bind 'enter:accept' \
           --bind "ctrl-a:reload($script_path_q --list-runs $workflow_q)+change-prompt(run all> )" \
           --bind "ctrl-x:reload($script_path_q --list-runs $workflow_q without_skipped)+change-prompt(run without skipped> )" \
@@ -118,11 +118,11 @@ fi
 # Enter のデフォルトは run 選択。--web / -w でブラウザに切り替える。
 enter_action="$script_path_q --runs {}"
 enter_bind="enter:execute($enter_action)"
-header='Enter: run一覧 / Ctrl-O: ブラウザ / Ctrl-E: エディタ / Ctrl-Y: コピー'
+header='Enter runs / Ctrl-O web / Ctrl-E edit / Ctrl-Y copy'
 if [ "${1:-}" = "--web" ] || [ "${1:-}" = "-w" ]; then
   enter_action='gh workflow view {} --web'
   enter_bind="enter:execute-silent($enter_action)+abort"
-  header='Enter: ブラウザ / Ctrl-R: run一覧 / Ctrl-E: エディタ / Ctrl-Y: コピー'
+  header='Enter web / Ctrl-R runs / Ctrl-E edit / Ctrl-Y copy'
 fi
 
 # 現存する yaml だけを列挙（削除済みは物理的に存在しないので自然に除外される）。
